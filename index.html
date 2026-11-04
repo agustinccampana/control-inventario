@@ -49,7 +49,6 @@
         function onScanSuccess(decodedText, decodedResult) {
             if (escaneoPausado) return;
 
-            // Guardar en el historial y sumar al inventario
             historialLecturas.push(decodedText);
             if (inventario[decodedText]) {
                 inventario[decodedText]++;
@@ -58,12 +57,11 @@
             }
             actualizarTabla();
 
-            // Iniciar pausa de 30 segundos
             escaneoPausado = true;
             const estadoDiv = document.getElementById('estado');
             estadoDiv.style.color = "red";
             
-            let segundosRestantes = 30;
+            let segundosRestantes = 10;
             estadoDiv.innerText = `Lectura registrada. Espera ${segundosRestantes}s...`;
 
             intervaloPausa = setInterval(() => {
@@ -85,7 +83,6 @@
                 return;
             }
 
-            // Eliminar la última lectura del historial y del inventario
             const ultimoCodigo = historialLecturas.pop();
             if (inventario[ultimoCodigo]) {
                 inventario[ultimoCodigo]--;
@@ -95,7 +92,6 @@
             }
             actualizarTabla();
 
-            // Cancelar la pausa para permitir escanear nuevamente al instante
             clearInterval(intervaloPausa);
             escaneoPausado = false;
             const estadoDiv = document.getElementById('estado');
