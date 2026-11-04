@@ -8,17 +8,26 @@
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     <style>
         body { font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; }
+        #estado { font-weight: bold; text-align: center; margin-bottom: 15px; color: #28a745; font-size: 18px; }
         #reader { width: 100%; margin-bottom: 20px; }
         table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
         th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
         th { background-color: #f2f2f2; }
-        button { padding: 10px 15px; font-size: 16px; background: #007bff; color: white; border: none; border-radius: 5px; width: 100%; }
+        .botones { display: flex; gap: 10px; margin-bottom: 20px; }
+        button { padding: 10px 15px; font-size: 16px; color: white; border: none; border-radius: 5px; width: 100%; cursor: pointer; }
+        .btn-excel { background: #28a745; }
+        .btn-borrar { background: #dc3545; }
     </style>
 </head>
 <body>
     <h2>Escáner de Inventario</h2>
+    <div id="estado">Listo para escanear</div>
     <div id="reader"></div>
-    <button onclick="exportarExcel()" style="margin-bottom: 20px; background: #28a745;">Exportar a Excel</button>
+    
+    <div class="botones">
+        <button class="btn-borrar" onclick="borrarUltimaLectura()">Borrar última lectura</button>
+        <button class="btn-excel" onclick="exportarExcel()">Exportar a Excel</button>
+    </div>
     
     <table id="tablaStock">
         <thead>
@@ -33,14 +42,65 @@
 
     <script>
         const inventario = {};
+        const historialLecturas = [];
+        let escaneoPausado = false;
+        let intervaloPausa;
 
         function onScanSuccess(decodedText, decodedResult) {
+            if (escaneoPausado) return;
+
+            // Guardar en el historial y sumar al inventario
+            historialLecturas.push(decodedText);
             if (inventario[decodedText]) {
                 inventario[decodedText]++;
             } else {
                 inventario[decodedText] = 1;
             }
             actualizarTabla();
+
+            // Iniciar pausa de 30 segundos
+            escaneoPausado = true;
+            const estadoDiv = document.getElementById('estado');
+            estadoDiv.style.color = "red";
+            
+            let segundosRestantes = 30;
+            estadoDiv.innerText = `Lectura registrada. Espera ${segundosRestantes}s...`;
+
+            intervaloPausa = setInterval(() => {
+                segundosRestantes--;
+                if (segundosRestantes > 0) {
+                    estadoDiv.innerText = `Lectura registrada. Espera ${segundosRestantes}s...`;
+                } else {
+                    clearInterval(intervaloPausa);
+                    escaneoPausado = false;
+                    estadoDiv.style.color = "#28a745";
+                    estadoDiv.innerText = "Listo para escanear";
+                }
+            }, 1000);
+        }
+
+        function borrarUltimaLectura() {
+            if (historialLecturas.length === 0) {
+                alert("No hay lecturas registradas para borrar.");
+                return;
+            }
+
+            // Eliminar la última lectura del historial y del inventario
+            const ultimoCodigo = historialLecturas.pop();
+            if (inventario[ultimoCodigo]) {
+                inventario[ultimoCodigo]--;
+                if (inventario[ultimoCodigo] <= 0) {
+                    delete inventario[ultimoCodigo];
+                }
+            }
+            actualizarTabla();
+
+            // Cancelar la pausa para permitir escanear nuevamente al instante
+            clearInterval(intervaloPausa);
+            escaneoPausado = false;
+            const estadoDiv = document.getElementById('estado');
+            estadoDiv.style.color = "#28a745";
+            estadoDiv.innerText = "Listo para escanear";
         }
 
         function actualizarTabla() {
