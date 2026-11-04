@@ -8,7 +8,7 @@
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     <style>
         body { font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; }
-        #estado { font-weight: bold; text-align: center; margin-bottom: 15px; color: #28a745; font-size: 18px; }
+        #estado { font-weight: bold; text-align: center; margin-bottom: 15px; color: #28a745; font-size: 22px; }
         #reader { width: 100%; margin-bottom: 20px; }
         table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
         th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
@@ -62,12 +62,12 @@
             estadoDiv.style.color = "red";
             
             let segundosRestantes = 10;
-            estadoDiv.innerText = `Lectura registrada. Espera ${segundosRestantes}s...`;
+            estadoDiv.innerText = `¡AGREGADO! Espera ${segundosRestantes}s...`;
 
             intervaloPausa = setInterval(() => {
                 segundosRestantes--;
                 if (segundosRestantes > 0) {
-                    estadoDiv.innerText = `Lectura registrada. Espera ${segundosRestantes}s...`;
+                    estadoDiv.innerText = `¡AGREGADO! Espera ${segundosRestantes}s...`;
                 } else {
                     clearInterval(intervaloPausa);
                     escaneoPausado = false;
@@ -103,7 +103,6 @@
             const tbody = document.getElementById('cuerpoTabla');
             tbody.innerHTML = '';
             
-            // Ordena el inventario basándose en la última vez que el código apareció en el historial
             const inventarioOrdenado = Object.entries(inventario).sort((a, b) => {
                 return historialLecturas.lastIndexOf(b[0]) - historialLecturas.lastIndexOf(a[0]);
             });
