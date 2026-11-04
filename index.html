@@ -102,7 +102,13 @@
         function actualizarTabla() {
             const tbody = document.getElementById('cuerpoTabla');
             tbody.innerHTML = '';
-            for (const [codigo, cantidad] of Object.entries(inventario)) {
+            
+            // Ordena el inventario basándose en la última vez que el código apareció en el historial
+            const inventarioOrdenado = Object.entries(inventario).sort((a, b) => {
+                return historialLecturas.lastIndexOf(b[0]) - historialLecturas.lastIndexOf(a[0]);
+            });
+
+            for (const [codigo, cantidad] of inventarioOrdenado) {
                 const fila = `<tr><td>${codigo}</td><td>${cantidad}</td></tr>`;
                 tbody.innerHTML += fila;
             }
