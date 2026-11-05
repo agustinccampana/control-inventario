@@ -32,7 +32,8 @@
     <table id="tablaStock">
         <thead>
             <tr>
-                <th>Código de Barras</th>
+                <th>Código</th>
+                <th>Producto</th>
                 <th>Cantidad</th>
             </tr>
         </thead>
@@ -48,16 +49,37 @@
 
         function onScanSuccess(decodedText, decodedResult) {
             if (escaneoPausado) return;
+            
+            // Pausa el escáner inmediatamente para que no lea múltiples veces mientras escribes
+            escaneoPausado = true; 
 
-            historialLecturas.push(decodedText);
             if (inventario[decodedText]) {
-                inventario[decodedText]++;
+                // Si el código ya existe, suma 1 directamente sin preguntar
+                inventario[decodedText].cantidad++;
+                historialLecturas.push(decodedText);
+                iniciarPausaExito();
             } else {
-                inventario[decodedText] = 1;
+                // Si es un código nuevo, abre el cuadro para escribir el nombre
+                setTimeout(() => {
+                    let nombreProducto = prompt(`Nuevo código detectado: ${decodedText}\n\nIngresa la descripción del producto:`);
+                    
+                    // Si cancelas o dejas en blanco, le asigna un nombre por defecto
+                    if (nombreProducto === null || nombreProducto.trim() === "") {
+                        nombreProducto = "Sin descripción";
+                    }
+                    
+                    inventario[decodedText] = {
+                        nombre: nombreProducto,
+                        cantidad: 1
+                    };
+                    historialLecturas.push(decodedText);
+                    iniciarPausaExito();
+                }, 100);
             }
-            actualizarTabla();
+        }
 
-            escaneoPausado = true;
+        function iniciarPausaExito() {
+            actualizarTabla();
             const estadoDiv = document.getElementById('estado');
             estadoDiv.style.color = "red";
             
@@ -85,8 +107,8 @@
 
             const ultimoCodigo = historialLecturas.pop();
             if (inventario[ultimoCodigo]) {
-                inventario[ultimoCodigo]--;
-                if (inventario[ultimoCodigo] <= 0) {
+                inventario[ultimoCodigo].cantidad--;
+                if (inventario[ultimoCodigo].cantidad <= 0) {
                     delete inventario[ultimoCodigo];
                 }
             }
@@ -107,15 +129,19 @@
                 return historialLecturas.lastIndexOf(b[0]) - historialLecturas.lastIndexOf(a[0]);
             });
 
-            for (const [codigo, cantidad] of inventarioOrdenado) {
-                const fila = `<tr><td>${codigo}</td><td>${cantidad}</td></tr>`;
+            for (const [codigo, datos] of inventarioOrdenado) {
+                const fila = `<tr><td>${codigo}</td><td>${datos.nombre}</td><td>${datos.cantidad}</td></tr>`;
                 tbody.innerHTML += fila;
             }
         }
 
         function exportarExcel() {
             const ws = XLSX.utils.json_to_sheet(
-                Object.entries(inventario).map(([Codigo, Cantidad]) => ({ Codigo, Cantidad }))
+                Object.entries(inventario).map(([Codigo, datos]) => ({ 
+                    Codigo: Codigo, 
+                    Producto: datos.nombre,
+                    Cantidad: datos.cantidad 
+                }))
             );
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, "Stock");
