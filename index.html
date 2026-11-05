@@ -17,6 +17,44 @@
         button { padding: 10px 15px; font-size: 16px; color: white; border: none; border-radius: 5px; width: 100%; cursor: pointer; }
         .btn-excel { background: #28a745; }
         .btn-borrar { background: #dc3545; }
+
+        /* Estilos para el cuadro emergente integrado */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            width: 85%;
+            max-width: 400px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        }
+        .modal-content h3 { margin-top: 0; font-size: 18px; color: #333; }
+        .modal-content input {
+            width: 100%;
+            padding: 10px;
+            font-size: 16px;
+            margin: 10px 0 15px 0;
+            box-sizing: border-box;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        .modal-content button {
+            background: #007bff;
+            color: white;
+            padding: 10px;
+            border: none;
+            border-radius: 5px;
+            width: 100%;
+            font-size: 16px;
+        }
     </style>
 </head>
 <body>
@@ -41,44 +79,68 @@
         </tbody>
     </table>
 
+    <!-- Ventana emergente en pantalla -->
+    <div id="modalNombre" class="modal-overlay">
+        <div class="modal-content">
+            <h3>Nuevo código detectado</h3>
+            <p style="margin: 5px 0; font-weight: bold; color: #555;" id="modalCodigoTexto"></p>
+            <label for="inputNombre">Descripción del producto:</label>
+            <input type="text" id="inputNombre" placeholder="Ej: Filtro de aceite" onkeydown="siEsEnterGuardar(event)">
+            <button onclick="guardarNombre()">Guardar producto</button>
+        </div>
+    </div>
+
     <script>
         const inventario = {};
         const historialLecturas = [];
-        let escaneoPausado = false;
+        let codigoEnProceso = null;
+        let isProcessing = false;
         let intervaloPausa;
 
         function onScanSuccess(decodedText, decodedResult) {
-            if (escaneoPausado) return;
-            
-            // Pausa el escáner inmediatamente para que no lea múltiples veces mientras escribes
-            escaneoPausado = true; 
+            if (isProcessing) return;
+            isProcessing = true;
+
+            // Pausa física del escáner para evitar que siga leyendo fotogramas
+            try { html5QrcodeScanner.pause(true); } catch(e) {}
+
+            codigoEnProceso = decodedText;
 
             if (inventario[decodedText]) {
-                // Si el código ya existe, suma 1 directamente sin preguntar
                 inventario[decodedText].cantidad++;
                 historialLecturas.push(decodedText);
-                iniciarPausaExito();
+                iniciarConteoRegresivo();
             } else {
-                // Si es un código nuevo, abre el cuadro para escribir el nombre
-                setTimeout(() => {
-                    let nombreProducto = prompt(`Nuevo código detectado: ${decodedText}\n\nIngresa la descripción del producto:`);
-                    
-                    // Si cancelas o dejas en blanco, le asigna un nombre por defecto
-                    if (nombreProducto === null || nombreProducto.trim() === "") {
-                        nombreProducto = "Sin descripción";
-                    }
-                    
-                    inventario[decodedText] = {
-                        nombre: nombreProducto,
-                        cantidad: 1
-                    };
-                    historialLecturas.push(decodedText);
-                    iniciarPausaExito();
-                }, 100);
+                document.getElementById('modalCodigoTexto').innerText = `Código: ${decodedText}`;
+                document.getElementById('inputNombre').value = '';
+                document.getElementById('modalNombre').style.display = 'flex';
+                setTimeout(() => document.getElementById('inputNombre').focus(), 150);
             }
         }
 
-        function iniciarPausaExito() {
+        function guardarNombre() {
+            let nombreProducto = document.getElementById('inputNombre').value.trim();
+            if (!nombreProducto) {
+                nombreProducto = "Sin descripción";
+            }
+
+            inventario[codigoEnProceso] = {
+                nombre: nombreProducto,
+                cantidad: 1
+            };
+            historialLecturas.push(codigoEnProceso);
+
+            document.getElementById('modalNombre').style.display = 'none';
+            iniciarConteoRegresivo();
+        }
+
+        function siEsEnterGuardar(event) {
+            if (event.key === "Enter") {
+                guardarNombre();
+            }
+        }
+
+        function iniciarConteoRegresivo() {
             actualizarTabla();
             const estadoDiv = document.getElementById('estado');
             estadoDiv.style.color = "red";
@@ -92,9 +154,11 @@
                     estadoDiv.innerText = `¡AGREGADO! Espera ${segundosRestantes}s...`;
                 } else {
                     clearInterval(intervaloPausa);
-                    escaneoPausado = false;
                     estadoDiv.style.color = "#28a745";
                     estadoDiv.innerText = "Listo para escanear";
+                    isProcessing = false;
+                    // Reanudar la lectura de la cámara
+                    try { html5QrcodeScanner.resume(); } catch(e) {}
                 }
             }, 1000);
         }
@@ -115,10 +179,14 @@
             actualizarTabla();
 
             clearInterval(intervaloPausa);
-            escaneoPausado = false;
+            document.getElementById('modalNombre').style.display = 'none';
+            isProcessing = false;
+            
             const estadoDiv = document.getElementById('estado');
             estadoDiv.style.color = "#28a745";
             estadoDiv.innerText = "Listo para escanear";
+
+            try { html5QrcodeScanner.resume(); } catch(e) {}
         }
 
         function actualizarTabla() {
