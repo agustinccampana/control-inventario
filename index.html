@@ -17,44 +17,6 @@
         button { padding: 10px 15px; font-size: 16px; color: white; border: none; border-radius: 5px; width: 100%; cursor: pointer; }
         .btn-excel { background: #28a745; }
         .btn-borrar { background: #dc3545; }
-
-        /* Estilos para el cuadro emergente integrado */
-        .modal-overlay {
-            display: none;
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0, 0, 0, 0.7);
-            justify-content: center;
-            align-items: center;
-            z-index: 1000;
-        }
-        .modal-content {
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            width: 85%;
-            max-width: 400px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-        }
-        .modal-content h3 { margin-top: 0; font-size: 18px; color: #333; }
-        .modal-content input {
-            width: 100%;
-            padding: 10px;
-            font-size: 16px;
-            margin: 10px 0 15px 0;
-            box-sizing: border-box;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-        }
-        .modal-content button {
-            background: #007bff;
-            color: white;
-            padding: 10px;
-            border: none;
-            border-radius: 5px;
-            width: 100%;
-            font-size: 16px;
-        }
     </style>
 </head>
 <body>
@@ -70,8 +32,7 @@
     <table id="tablaStock">
         <thead>
             <tr>
-                <th>Código</th>
-                <th>Producto</th>
+                <th>Código de Barras</th>
                 <th>Cantidad</th>
             </tr>
         </thead>
@@ -79,69 +40,24 @@
         </tbody>
     </table>
 
-    <!-- Ventana emergente en pantalla -->
-    <div id="modalNombre" class="modal-overlay">
-        <div class="modal-content">
-            <h3>Nuevo código detectado</h3>
-            <p style="margin: 5px 0; font-weight: bold; color: #555;" id="modalCodigoTexto"></p>
-            <label for="inputNombre">Descripción del producto:</label>
-            <input type="text" id="inputNombre" placeholder="Ej: Filtro de aceite" onkeydown="siEsEnterGuardar(event)">
-            <button onclick="guardarNombre()">Guardar producto</button>
-        </div>
-    </div>
-
     <script>
         const inventario = {};
         const historialLecturas = [];
-        let codigoEnProceso = null;
-        let isProcessing = false;
+        let escaneoPausado = false;
         let intervaloPausa;
 
         function onScanSuccess(decodedText, decodedResult) {
-            if (isProcessing) return;
-            isProcessing = true;
+            if (escaneoPausado) return;
 
-            // Pausa física del escáner para evitar que siga leyendo fotogramas
-            try { html5QrcodeScanner.pause(true); } catch(e) {}
-
-            codigoEnProceso = decodedText;
-
+            historialLecturas.push(decodedText);
             if (inventario[decodedText]) {
-                inventario[decodedText].cantidad++;
-                historialLecturas.push(decodedText);
-                iniciarConteoRegresivo();
+                inventario[decodedText]++;
             } else {
-                document.getElementById('modalCodigoTexto').innerText = `Código: ${decodedText}`;
-                document.getElementById('inputNombre').value = '';
-                document.getElementById('modalNombre').style.display = 'flex';
-                setTimeout(() => document.getElementById('inputNombre').focus(), 150);
+                inventario[decodedText] = 1;
             }
-        }
-
-        function guardarNombre() {
-            let nombreProducto = document.getElementById('inputNombre').value.trim();
-            if (!nombreProducto) {
-                nombreProducto = "Sin descripción";
-            }
-
-            inventario[codigoEnProceso] = {
-                nombre: nombreProducto,
-                cantidad: 1
-            };
-            historialLecturas.push(codigoEnProceso);
-
-            document.getElementById('modalNombre').style.display = 'none';
-            iniciarConteoRegresivo();
-        }
-
-        function siEsEnterGuardar(event) {
-            if (event.key === "Enter") {
-                guardarNombre();
-            }
-        }
-
-        function iniciarConteoRegresivo() {
             actualizarTabla();
+
+            escaneoPausado = true;
             const estadoDiv = document.getElementById('estado');
             estadoDiv.style.color = "red";
             
@@ -154,11 +70,9 @@
                     estadoDiv.innerText = `¡AGREGADO! Espera ${segundosRestantes}s...`;
                 } else {
                     clearInterval(intervaloPausa);
+                    escaneoPausado = false;
                     estadoDiv.style.color = "#28a745";
                     estadoDiv.innerText = "Listo para escanear";
-                    isProcessing = false;
-                    // Reanudar la lectura de la cámara
-                    try { html5QrcodeScanner.resume(); } catch(e) {}
                 }
             }, 1000);
         }
@@ -171,22 +85,18 @@
 
             const ultimoCodigo = historialLecturas.pop();
             if (inventario[ultimoCodigo]) {
-                inventario[ultimoCodigo].cantidad--;
-                if (inventario[ultimoCodigo].cantidad <= 0) {
+                inventario[ultimoCodigo]--;
+                if (inventario[ultimoCodigo] <= 0) {
                     delete inventario[ultimoCodigo];
                 }
             }
             actualizarTabla();
 
             clearInterval(intervaloPausa);
-            document.getElementById('modalNombre').style.display = 'none';
-            isProcessing = false;
-            
+            escaneoPausado = false;
             const estadoDiv = document.getElementById('estado');
             estadoDiv.style.color = "#28a745";
             estadoDiv.innerText = "Listo para escanear";
-
-            try { html5QrcodeScanner.resume(); } catch(e) {}
         }
 
         function actualizarTabla() {
@@ -197,19 +107,15 @@
                 return historialLecturas.lastIndexOf(b[0]) - historialLecturas.lastIndexOf(a[0]);
             });
 
-            for (const [codigo, datos] of inventarioOrdenado) {
-                const fila = `<tr><td>${codigo}</td><td>${datos.nombre}</td><td>${datos.cantidad}</td></tr>`;
+            for (const [codigo, cantidad] of inventarioOrdenado) {
+                const fila = `<tr><td>${codigo}</td><td>${cantidad}</td></tr>`;
                 tbody.innerHTML += fila;
             }
         }
 
         function exportarExcel() {
             const ws = XLSX.utils.json_to_sheet(
-                Object.entries(inventario).map(([Codigo, datos]) => ({ 
-                    Codigo: Codigo, 
-                    Producto: datos.nombre,
-                    Cantidad: datos.cantidad 
-                }))
+                Object.entries(inventario).map(([Codigo, Cantidad]) => ({ Codigo, Cantidad }))
             );
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, "Stock");
