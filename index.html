@@ -10,6 +10,22 @@
         body { font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; }
         #estado { font-weight: bold; text-align: center; margin-bottom: 15px; color: #28a745; font-size: 22px; }
         #reader { width: 100%; margin-bottom: 20px; }
+        
+        /* Corrección de contraste para los botones internos del escáner */
+        #reader button {
+            background-color: #222222 !important;
+            color: #ffffff !important;
+            border: 1px solid #444444 !important;
+            border-radius: 5px !important;
+            padding: 8px 12px !important;
+            font-weight: bold !important;
+            cursor: pointer !important;
+        }
+        #reader input[type="file"] {
+            background-color: #222222 !important;
+            color: #ffffff !important;
+        }
+
         table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
         th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
         th { background-color: #f2f2f2; }
@@ -102,7 +118,6 @@
             if (isProcessing) return;
             isProcessing = true;
 
-            // Pausa física de la cámara
             try { html5QrcodeScanner.pause(true); } catch(e) {}
 
             codigoEnProceso = decodedText;
@@ -112,7 +127,6 @@
             const inputCantidad = document.getElementById('inputCantidad');
 
             if (inventario[decodedText]) {
-                // Si el producto existe: autocompleta el nombre y hace foco en la cantidad
                 inputNombre.value = inventario[decodedText].nombre;
                 inputCantidad.value = 1;
                 document.getElementById('modalLectura').style.display = 'flex';
@@ -121,7 +135,6 @@
                     inputCantidad.select();
                 }, 150);
             } else {
-                // Si es nuevo: limpia el nombre y hace foco en la descripción
                 inputNombre.value = '';
                 inputCantidad.value = 1;
                 document.getElementById('modalLectura').style.display = 'flex';
@@ -150,7 +163,6 @@
                 };
             }
 
-            // Registrar en el historial para permitir deshacer este lote exacto
             historialLecturas.push({
                 codigo: codigoEnProceso,
                 cantidadSumada: cantidadASumar
