@@ -17,6 +17,40 @@
         button { padding: 10px 15px; font-size: 16px; color: white; border: none; border-radius: 5px; width: 100%; cursor: pointer; }
         .btn-excel { background: #28a745; }
         .btn-borrar { background: #dc3545; }
+
+        /* Estilos del cuadro emergente */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            width: 85%;
+            max-width: 400px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        }
+        .modal-content h3 { margin-top: 0; font-size: 18px; color: #333; }
+        .modal-content label { display: block; margin-top: 10px; font-weight: bold; font-size: 14px; color: #555; }
+        .modal-content input {
+            width: 100%;
+            padding: 10px;
+            font-size: 16px;
+            margin: 5px 0 10px 0;
+            box-sizing: border-box;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        .btn-guardar {
+            background: #007bff;
+            margin-top: 10px;
+        }
     </style>
 </head>
 <body>
@@ -32,7 +66,8 @@
     <table id="tablaStock">
         <thead>
             <tr>
-                <th>Código de Barras</th>
+                <th>Código</th>
+                <th>Producto</th>
                 <th>Cantidad</th>
             </tr>
         </thead>
@@ -40,24 +75,99 @@
         </tbody>
     </table>
 
+    <!-- Ventana emergente en pantalla -->
+    <div id="modalLectura" class="modal-overlay">
+        <div class="modal-content">
+            <h3>Código escaneado</h3>
+            <p style="margin: 5px 0; font-weight: bold; color: #007bff; font-size: 16px;" id="modalCodigoTexto"></p>
+            
+            <label for="inputNombre">Descripción del producto:</label>
+            <input type="text" id="inputNombre" placeholder="Ej: Filtro de aceite" onkeydown="siEsEnterGuardar(event)">
+
+            <label for="inputCantidad">Cantidad a sumar:</label>
+            <input type="number" id="inputCantidad" value="1" min="1" onkeydown="siEsEnterGuardar(event)">
+
+            <button class="btn-guardar" onclick="guardarLectura()">Confirmar y Sumar</button>
+        </div>
+    </div>
+
     <script>
         const inventario = {};
         const historialLecturas = [];
-        let escaneoPausado = false;
+        let codigoEnProceso = null;
+        let isProcessing = false;
         let intervaloPausa;
 
         function onScanSuccess(decodedText, decodedResult) {
-            if (escaneoPausado) return;
+            if (isProcessing) return;
+            isProcessing = true;
 
-            historialLecturas.push(decodedText);
+            // Pausa física de la cámara
+            try { html5QrcodeScanner.pause(true); } catch(e) {}
+
+            codigoEnProceso = decodedText;
+            document.getElementById('modalCodigoTexto').innerText = `Código: ${decodedText}`;
+
+            const inputNombre = document.getElementById('inputNombre');
+            const inputCantidad = document.getElementById('inputCantidad');
+
             if (inventario[decodedText]) {
-                inventario[decodedText]++;
+                // Si el producto existe: autocompleta el nombre y hace foco en la cantidad
+                inputNombre.value = inventario[decodedText].nombre;
+                inputCantidad.value = 1;
+                document.getElementById('modalLectura').style.display = 'flex';
+                setTimeout(() => {
+                    inputCantidad.focus();
+                    inputCantidad.select();
+                }, 150);
             } else {
-                inventario[decodedText] = 1;
+                // Si es nuevo: limpia el nombre y hace foco en la descripción
+                inputNombre.value = '';
+                inputCantidad.value = 1;
+                document.getElementById('modalLectura').style.display = 'flex';
+                setTimeout(() => inputNombre.focus(), 150);
             }
-            actualizarTabla();
+        }
 
-            escaneoPausado = true;
+        function guardarLectura() {
+            let nombreProducto = document.getElementById('inputNombre').value.trim();
+            let cantidadASumar = parseInt(document.getElementById('inputCantidad').value, 10);
+
+            if (!nombreProducto) {
+                nombreProducto = "Sin descripción";
+            }
+            if (isNaN(cantidadASumar) || cantidadASumar < 1) {
+                cantidadASumar = 1;
+            }
+
+            if (inventario[codigoEnProceso]) {
+                inventario[codigoEnProceso].nombre = nombreProducto;
+                inventario[codigoEnProceso].cantidad += cantidadASumar;
+            } else {
+                inventario[codigoEnProceso] = {
+                    nombre: nombreProducto,
+                    cantidad: cantidadASumar
+                };
+            }
+
+            // Registrar en el historial para permitir deshacer este lote exacto
+            historialLecturas.push({
+                codigo: codigoEnProceso,
+                cantidadSumada: cantidadASumar
+            });
+
+            document.getElementById('modalLectura').style.display = 'none';
+            iniciarConteoRegresivo();
+        }
+
+        function siEsEnterGuardar(event) {
+            if (event.key === "Enter") {
+                guardarLectura();
+            }
+        }
+
+        function iniciarConteoRegresivo() {
+            actualizarTabla();
             const estadoDiv = document.getElementById('estado');
             estadoDiv.style.color = "red";
             
@@ -70,9 +180,10 @@
                     estadoDiv.innerText = `¡AGREGADO! Espera ${segundosRestantes}s...`;
                 } else {
                     clearInterval(intervaloPausa);
-                    escaneoPausado = false;
                     estadoDiv.style.color = "#28a745";
                     estadoDiv.innerText = "Listo para escanear";
+                    isProcessing = false;
+                    try { html5QrcodeScanner.resume(); } catch(e) {}
                 }
             }, 1000);
         }
@@ -83,20 +194,27 @@
                 return;
             }
 
-            const ultimoCodigo = historialLecturas.pop();
-            if (inventario[ultimoCodigo]) {
-                inventario[ultimoCodigo]--;
-                if (inventario[ultimoCodigo] <= 0) {
-                    delete inventario[ultimoCodigo];
+            const ultimaLectura = historialLecturas.pop();
+            const codigo = ultimaLectura.codigo;
+            const cant = ultimaLectura.cantidadSumada;
+
+            if (inventario[codigo]) {
+                inventario[codigo].cantidad -= cant;
+                if (inventario[codigo].cantidad <= 0) {
+                    delete inventario[codigo];
                 }
             }
             actualizarTabla();
 
             clearInterval(intervaloPausa);
-            escaneoPausado = false;
+            document.getElementById('modalLectura').style.display = 'none';
+            isProcessing = false;
+            
             const estadoDiv = document.getElementById('estado');
             estadoDiv.style.color = "#28a745";
             estadoDiv.innerText = "Listo para escanear";
+
+            try { html5QrcodeScanner.resume(); } catch(e) {}
         }
 
         function actualizarTabla() {
@@ -104,18 +222,24 @@
             tbody.innerHTML = '';
             
             const inventarioOrdenado = Object.entries(inventario).sort((a, b) => {
-                return historialLecturas.lastIndexOf(b[0]) - historialLecturas.lastIndexOf(a[0]);
+                const idxA = historialLecturas.map(h => h.codigo).lastIndexOf(a[0]);
+                const idxB = historialLecturas.map(h => h.codigo).lastIndexOf(b[0]);
+                return idxB - idxA;
             });
 
-            for (const [codigo, cantidad] of inventarioOrdenado) {
-                const fila = `<tr><td>${codigo}</td><td>${cantidad}</td></tr>`;
+            for (const [codigo, datos] of inventarioOrdenado) {
+                const fila = `<tr><td>${codigo}</td><td>${datos.nombre}</td><td>${datos.cantidad}</td></tr>`;
                 tbody.innerHTML += fila;
             }
         }
 
         function exportarExcel() {
             const ws = XLSX.utils.json_to_sheet(
-                Object.entries(inventario).map(([Codigo, Cantidad]) => ({ Codigo, Cantidad }))
+                Object.entries(inventario).map(([Codigo, datos]) => ({ 
+                    Codigo: Codigo, 
+                    Producto: datos.nombre,
+                    Cantidad: datos.cantidad 
+                }))
             );
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, "Stock");
